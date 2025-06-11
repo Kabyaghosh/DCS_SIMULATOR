@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced DCS Simulation - BIOTECH Team</title>
+    <!-- Adding Font Awesome for professional icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --bg-color-deep: #0d1117;
+            --bg-color-medium: #161b22;
+            --primary-color: #21262d;
+            --glass-bg: rgba(33, 38, 45, 0.5);
+            --border-color: rgba(139, 148, 158, 0.3);
+            --text-color: #c9d1d9;
+            --text-color-muted: #8b949e;
+            --command-color: #58a6ff;
+            --feedback-color: #3fb950;
+            --process-color: #e3b341;
+            --alert-color: #f85149;
+            --glow-color: rgba(88, 166, 255, 0.7);
+            --font-family-ui: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+            --font-family-mono: 'Fira Code', 'Courier New', Courier, monospace;
+            --border-radius: 12px;
+            --shadow: 0 8px 32px rgba(0,0,0,0.5);
+            --transition-speed: 0.3s;
+        }
+
+        /* --- Base & Body --- */
+        * { box-sizing: border-box; }
+        html, body {
+            height: 100%; margin: 0;
+            font-family: var(--font-family-ui);
+            background-color: var(--bg-color-deep);
+            color: var(--text-color);
+            overflow: hidden;
+        }
+        body::before { /* Animated Grid Background */
+            content: '';
+            position: fixed;
+            top: 0; left: 0;
+            width: 100vw; height: 100vh;
+            background-image:
+                linear-gradient(to right, var(--border-color) 1px, transparent 1px),
+                linear-gradient(to bottom, var(--border-color) 1px, transparent 1px);
+            background-size: 50px 50px;
+            opacity: 0.1;
+            z-index: -1;
+            animation: move-grid 20s linear infinite;
+        }
+        @keyframes move-grid {
+            from { background-position: 0 0; }
+            to { background-position: 50px 50px; }
+        }
+
+        /* --- Layout --- */
+        .wrapper { display: flex; flex-direction: column; height: 100vh; }
+        header { text-align: center; padding: 15px; background: var(--bg-color-medium); border-bottom: 2px solid var(--border-color); }
+        header h1 { margin: 0; font-size: 1.8rem; color: var(--text-color); font-weight: 500; letter-spacing: 2px; text-transform: uppercase; }
+        header h1 i { color: var(--command-color); margin-right: 10px; }
+        .main-content { flex-grow: 1; display: flex; padding: 20px; gap: 20px; overflow: hidden; }
+
+        /* --- DCS Architecture Diagram (Glass Panels) --- */
+        .dcs-container { flex: 2; display: flex; flex-direction: column; gap: 15px; position: relative; }
+        .level {
+            background: var(--glass-bg);
+            backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            padding: 12px 20px;
+            display: flex; align-items: center; gap: 20px;
+            transition: all var(--transition-speed) ease;
+            position: relative;
+            box-shadow: var(--shadow);
+            overflow: hidden;
+        }
+        .level::before { /* Glow effect element */
+            content: ''; position: absolute; top:0; left:0; right:0; bottom:0;
+            border-radius: var(--border-radius);
+            border: 2px solid transparent;
+            transition: all var(--transition-speed) ease;
+            pointer-events: none;
+        }
+        .level.active::before { border-color: var(--command-color); box-shadow: 0 0 20px var(--glow-color); }
+        .level.success::before { border-color: var(--feedback-color); box-shadow: 0 0 20px rgba(63, 185, 80, 0.7); }
+        .level.processing::before { border-color: var(--process-color); animation: pulse-process 1.5s infinite; }
+        @keyframes pulse-process {
+            0% { box-shadow: 0 0 10px rgba(227, 179, 65, 0.3); }
+            50% { box-shadow: 0 0 25px rgba(227, 179, 65, 0.9); }
+            100% { box-shadow: 0 0 10px rgba(227, 179, 65, 0.3); }
+        }
+
+        .level-icon { font-size: 2.2rem; width: 50px; text-align: center; color: var(--text-color-muted); transition: color var(--transition-speed) ease;}
+        .level.active .level-icon, .level.success .level-icon { color: var(--command-color); }
+        .level-info { flex-grow: 1; }
+        .level-title { margin: 0 0 5px 0; font-size: 1.1rem; font-weight: 600; }
+        .level.active .level-title { color: var(--command-color); }
+        .level-description { margin: 0; color: var(--text-color-muted); font-size: 0.85rem; }
+
+        /* --- Level 4 Bottle Making Animation (Enhanced) --- */
+        #level4 { position: relative; overflow: hidden; }
+        #bottle-animation-container {
+            position: absolute; top: 50%; right: 15px; transform: translateY(-50%);
+            width: 100px; height: 100px; perspective: 600px;
+            display: none; opacity: 0; transition: opacity 0.5s;
+        }
+        #bottle-animation-container.animating { display: block; opacity: 1; }
+        .mold-half {
+            position: absolute; width: 50%; height: 100%;
+            background: linear-gradient(145deg, #8c96a5, #667281);
+            border: 2px solid #4a5568; box-shadow: inset 0 0 10px rgba(0,0,0,0.5);
+            transition: transform 1s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+        }
+        .mold-half::before { /* Heating glow effect */
+            content: ''; position: absolute; inset: 0;
+            background: var(--process-color); opacity: 0;
+            animation: heat-glow 2s ease-in-out 0.5s;
+        }
+        @keyframes heat-glow { 0% { opacity: 0; } 50% { opacity: 0.4; } 100% { opacity: 0; } }
+        .mold-left { left: 0; border-radius: 10px 0 0 10px; transform: translateX(-150%); }
+        .mold-right { right: 0; border-radius: 0 10px 10px 0; transform: translateX(150%); }
+        #bottle-animation-container.animating .mold-left,
+        #bottle-animation-container.animating .mold-right { transform: translateX(0); }
+        .pellet-container { position: absolute; width: 100%; height: 100%; }
+        .pellet { position: absolute; width: 5px; height: 5px; background: #e2e8f0; border-radius: 50%; transform: translateX(-50%); animation: fall 0.5s linear forwards; }
+        @keyframes fall { from { top: -20px; opacity: 1; } to { top: 60px; opacity: 0; } }
+        .formed-bottle { position: absolute; top: 20px; left: calc(50% - 12px); width: 24px; height: 60px; border: 2px solid lightblue; border-radius: 6px 6px 2px 2px; background: rgba(173, 216, 230, 0.3); transform: scale(0) rotateY(0deg); opacity: 0; }
+        #bottle-animation-container.animating .formed-bottle { animation: form-and-spin 2s ease-out 0.8s forwards; }
+        @keyframes form-and-spin {
+            0% { transform: scale(0) rotateY(0deg); opacity: 0; }
+            40% { transform: scale(1.1) rotateY(0deg); opacity: 1; box-shadow: 0 0 15px lightblue; }
+            100% { transform: scale(1) rotateY(360deg); opacity: 1; box-shadow: none; }
+        }
+
+        /* --- Factory Floor & Animations --- */
+        #factory-floor {
+            background: rgba(13, 17, 23, 0.5);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius); padding: 20px;
+            display: flex; flex-direction: column; justify-content: space-between;
+        }
+        .conveyor-belt {
+            width: 100%; height: 80px;
+            background-color: #30363d;
+            border: 3px solid #0d1117;
+            position: relative; border-radius: 5px; overflow: hidden;
+            background-image:
+                linear-gradient(rgba(255,255,255,0.05) 50%, transparent 50%),
+                linear-gradient(90deg, rgba(255,255,255,0.05) 50%, transparent 50%);
+            background-size: 30px 30px;
+        }
+        .conveyor-belt.running { animation: move-conveyor 0.5s linear infinite; }
+        @keyframes move-conveyor { from { background-position: 0 0; } to { background-position: -30px 30px; } }
+        .factory-stations { display: flex; justify-content: space-around; position: relative; top: -110px;}
+        .station { width: 80px; text-align: center; color: var(--text-color-muted); font-size: 0.8rem; }
+        .station-icon {
+            width: 60px; height: 60px;
+            background: var(--bg-color-medium);
+            border-radius: 50%;
+            margin: 0 auto 5px auto;
+            border: 2px solid var(--border-color);
+            position: relative; overflow: hidden;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.8rem; color: #8b949e;
+            transition: all var(--transition-speed) ease;
+        }
+        .station.active .station-icon {
+            color: var(--feedback-color);
+            border-color: var(--feedback-color);
+            box-shadow: 0 0 15px var(--feedback-color);
+        }
+        .station.active .station-icon::after { /* Scanline effect */
+            content: ''; position: absolute; top:0; left:0; width: 100%; height: 3px;
+            background: linear-gradient(90deg, transparent, var(--feedback-color), transparent);
+            animation: scanline 0.8s linear;
+        }
+        @keyframes scanline { from { transform: translateY(-10px); } to { transform: translateY(60px); } }
+
+        #bottle { width: 25px; height: 60px; border-radius: 6px 6px 2px 2px; position: absolute; bottom: 10px; left: -50px; z-index: 10; opacity: 0; background: rgba(173, 216, 230, 0.1); border: 2px solid rgba(173, 216, 230, 0.7); backdrop-filter: blur(2px); }
+        .bottle-liquid { position: absolute; bottom: 0; left:0; right:0; height: 0%; background: var(--command-color); transition: height 0.5s ease-in; box-shadow: 0 0 10px var(--command-color); }
+        .bottle-cap { position: absolute; top: -7px; left: 3.5px; width: 14px; height: 5px; background: var(--alert-color); border-radius: 2px; opacity: 0; transition: opacity 0.3s; }
+        .bottle-label { position: absolute; top: 15px; left: -2px; right: -2px; height: 20px; background: white; color: black; font-size: 0.5rem; text-align: center; display:flex; align-items:center; justify-content:center; opacity:0; transition: opacity 0.3s; transform: scale(0.5); }
+        .rejection-bin { align-self: flex-end; width: 100px; height: 50px; background: rgba(248, 81, 73, 0.1); border: 2px solid var(--alert-color); border-top: none; text-align: center; color: var(--alert-color); font-size: 0.8em; padding-top:5px; border-radius: 0 0 5px 5px;}
+
+        /* --- Right Interaction Panel (The "Software") --- */
+        .interaction-panel {
+            flex: 1;
+            background: var(--glass-bg);
+            backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+            border: 1px solid var(--border-color);
+            border-radius: var(--border-radius);
+            padding: 20px; display: flex; flex-direction: column;
+            box-shadow: var(--shadow);
+            min-height: 700px;
+        }
+        #live-data-screen, #instruction-screen { display: none; flex-direction: column; height: 100%;}
+        .interaction-panel.state-live-data #live-data-screen { display: flex; }
+        .interaction-panel.state-instruction #instruction-screen { display: flex; }
+        .interaction-panel.state-idle #live-data-screen { display: flex; } /* Show dashboard in idle state */
+
+        /* --- Live Dashboard --- */
+        #live-data-screen h2 { margin: 0 0 20px 0; text-align: center; color: var(--text-color); border-bottom: 1px solid var(--border-color); padding-bottom: 15px; font-weight: 500; }
+        .data-point { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; font-size: 1rem; }
+        .data-point span:first-child { color: var(--text-color-muted); }
+        .data-point .value { font-weight: bold; font-family: var(--font-family-mono); }
+        .data-point .value.ok { color: var(--feedback-color); }
+        .data-point .value.warn { color: var(--process-color); }
+        .data-point .value.bad { color: var(--alert-color); }
+
+        /* Progress Bar Styling */
+        .progress-bar-container { flex-direction: column; align-items: flex-start; margin-bottom: 15px; }
+        .progress-bar-container .label-container { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; color: var(--text-color-muted); }
+        .progress-bar-container .label-container i { font-size: 0.9em; }
+        .progress-bar { width: 100%; height: 24px; background-color: var(--primary-color); border-radius: 5px; position: relative; border: 1px solid var(--border-color); }
+        .progress-fill { height: 100%; background: linear-gradient(90deg, var(--command-color), #82c3ff); border-radius: 4px; transition: width var(--transition-speed) ease-out; }
+        .progress-text { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); color: var(--text-color); font-family: var(--font-family-mono); font-size: 0.8rem; text-shadow: 1px 1px 2px rgba(0,0,0,0.7); }
+
+        #log-area { background: var(--bg-color-deep); flex-grow:1; border-radius: 5px; padding: 15px; font-family: var(--font-family-mono); font-size: 0.8rem; overflow-y: auto; border: 1px solid var(--border-color); margin-top: 10px;}
+        #log-area p { margin: 0 0 5px 0; animation: log-fade-in 0.5s ease; }
+        @keyframes log-fade-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .log-time { color: #888; margin-right: 10px; } .log-cmd {color: #88c0ff;} .log-fb {color: #88ffd6;} .log-warn {color: #ffaa00;} .log-alert { color: var(--alert-color); font-weight: bold; background: rgba(248, 81, 73, 0.1); padding: 2px 4px; border-radius: 3px; }
+
+        /* Buttons */
+        #manual-halt-btn {
+            background: linear-gradient(145deg, #c43e37, var(--alert-color)); color: white; width: 100%;
+            padding: 12px; margin: 15px 0 10px 0; border-radius: var(--border-radius);
+            border: 1px solid rgba(255,255,255,0.2); cursor: pointer; font-weight: bold; text-transform: uppercase;
+            transition: all var(--transition-speed) ease;
+            box-shadow: 0 4px 15px rgba(248, 81, 73, 0.3);
+        }
+        #manual-halt-btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(248, 81, 73, 0.5); }
+        #manual-halt-btn:disabled { background: var(--primary-color); cursor: not-allowed; opacity: 0.5; box-shadow: none; }
+        #instruction-btn, .manual-override-btn {
+            margin-top: 25px; padding: 14px 25px; border: none;
+            background: linear-gradient(145deg, #3182ce, var(--command-color));
+            color: white; border-radius: var(--border-radius); cursor: pointer;
+            transition: all var(--transition-speed) ease;
+            font-size: 1rem; font-weight: bold; width:100%;
+            box-shadow: 0 4px 15px rgba(88, 166, 255, 0.2);
+        }
+        #instruction-btn:hover:not(:disabled), .manual-override-btn:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(88, 166, 255, 0.4); }
+        #instruction-btn:disabled, .manual-override-btn:disabled { background: var(--primary-color); cursor: not-allowed; opacity: 0.5; box-shadow: none; }
+
+        /* Instruction Screen */
+        #instruction-title { margin: 0 0 10px 0; font-size: 1.5rem; text-align: center; color: var(--command-color); font-weight: 500;}
+        #instruction-desc { font-size: 0.9rem; color: var(--text-color-muted); text-align: center; margin: 10px 0 20px 0;}
+        #instruction-data-display { background: var(--bg-color-deep); padding: 20px; border-radius: 8px; display: flex; flex-direction: column; gap: 15px; border: 1px solid var(--border-color); }
+        .data-item { display: flex; align-items: center; justify-content: space-between; font-size: 1rem; }
+        .data-item .icon-label { display:flex; align-items:center; gap: 15px;}
+        .data-item .icon { font-size: 1.3rem; width: 30px; text-align: center; color: var(--text-color-muted); }
+        .data-item .label { color: var(--text-color-muted); min-width: 90px; }
+        .data-item .value { font-weight: bold; color: var(--text-color); font-family: var(--font-family-mono); }
+        .data-item input, .data-item select { padding: 10px; border-radius: 5px; border: 1px solid var(--border-color); background: var(--primary-color); color: var(--text-color); font-size: 1rem; width: 160px; }
+
+        /* Data Packet Animation */
+        .data-packet {
+            position: absolute; width: 12px; height: 12px;
+            border-radius: 50%;
+            background-color: var(--packet-color);
+            box-shadow: 0 0 10px 2px var(--packet-color), 0 0 20px 5px rgba(255,255,255,0.5);
+            z-index: 100;
+            transition: top 1.5s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.5s;
+        }
+        .data-packet::after { /* Comet Tail */
+            content: ''; position: absolute;
+            left: 50%; top: 12px;
+            transform: translateX(-50%);
+            width: 4px; height: 50px;
+            background: linear-gradient(to bottom, var(--packet-color), transparent);
+            border-radius: 50%;
+        }
+
+        footer { text-align: center; padding: 15px; background: #0d1117; font-size: 0.9rem; color: #888; border-top: 1px solid var(--border-color); }
+        @media (max-width: 1200px) { .main-content { flex-direction: column; overflow: auto;} }
+        @media (max-width: 600px) { .level { flex-direction: column; text-align: center; } }
+    </style>
+</head>
+<body>
+    <div class="wrapper">
+        <header><h1><i class="fa-solid fa-gears"></i>Advanced DCS Simulation BY Team BioTech</h1></header>
+        <main class="main-content">
+            <div class="dcs-container" id="dcs-container">
+                <div class="level" id="level4">
+                    <div class="level-icon"><i class="fa-solid fa-building-user"></i></div>
+                    <div class="level-info">
+                        <h3 class="level-title">Level 4: Business Planning</h3>
+                        <p class="level-description">Sets high-level production goals and receives final reports.</p>
+                    </div>
+                    <div id="bottle-animation-container">
+                        <div class="mold-half mold-left"></div>
+                        <div class="mold-half mold-right"></div>
+                        <div class="pellet-container"></div>
+                        <div class="formed-bottle"></div>
+                    </div>
+                </div>
+                <div class="level" id="level3">
+                    <div class="level-icon"><i class="fa-solid fa-clipboard-list"></i></div>
+                    <div class="level-info">
+                        <h3 class="level-title">Level 3: Operations (MES)</h3>
+                        <p class="level-description">Translates orders into detailed production schedules.</p>
+                    </div>
+                </div>
+                <div class="level" id="level2">
+                    <div class="level-icon"><i class="fa-solid fa-desktop"></i></div>
+                    <div class="level-info">
+                        <h3 class="level-title">Level 2: Supervisory (SCADA)</h3>
+                        <p class="level-description">Monitors & controls the process via HMI.</p>
+                    </div>
+                </div>
+                <div class="level" id="level1">
+                    <div class="level-icon"><i class="fa-solid fa-microchip"></i></div>
+                    <div class="level-info">
+                        <h3 class="level-title">Level 1: Local Control (PLC)</h3>
+                        <p class="level-description">Executes logic, processes feedback, handles real-time control.</p>
+                    </div>
+                </div>
+                <div class="level" id="level0">
+                    <div class="level-icon"><i class="fa-solid fa-industry"></i></div>
+                    <div class="level-info">
+                        <h3 class="level-title">Level 0: Field Devices</h3>
+                        <p class="level-description">The machinery, sensors, actuators on the factory floor.</p>
+                    </div>
+                </div>
+                
+                <div id="factory-floor">
+                    <div class="conveyor-belt" id="conveyor"><div id="bottle"><div class="bottle-liquid"></div><div class="bottle-cap"></div><div class="bottle-label">Product</div></div></div>
+                    <div class="factory-stations">
+                        <div class="station" id="station-molder"><div class="station-icon"><i class="fa-solid fa-blender"></i></div> Molder</div>
+                        <div class="station" id="station-filler"><div class="station-icon"><i class="fa-solid fa-fill-drip"></i></div> Filler</div>
+                        <div class="station" id="station-capper"><div class="station-icon"><i class="fa-solid fa-box-archive"></i></div> Capper</div>
+                        <div class="station" id="station-labeler"><div class="station-icon"><i class="fa-solid fa-tags"></i></div> Labeler</div>
+                        <div class="station" id="station-qc"><div class="station-icon"><i class="fa-solid fa-microscope"></i></div> Quality</div>
+                    </div>
+                     <div class="rejection-bin" id="rejection-bin">REJECT BIN</div>
+                </div>
+            </div>
+
+            <div class="interaction-panel state-idle" id="interaction-panel">
+                <div id="live-data-screen">
+                    <h2><i class="fa-solid fa-wave-square"></i> Live Data Dashboard</h2>
+                    <div class="data-point"><span><i class="fa-solid fa-power-off"></i> Production Status:</span><span class="value" id="status-val">IDLE</span></div>
+                    <div class="data-point"><span><i class="fa-solid fa-hashtag"></i> Order ID:</span><span class="value" id="order-id-val">N/A</span></div>
+                    <div class="data-point"><span><i class="fa-solid fa-circle-check"></i> Good Units:</span><span class="value ok"><span id="produced-val">0</span> / <span id="goal-val">0</span></span></div>
+                    <div class="data-point"><span><i class="fa-solid fa-circle-xmark"></i> Rejected Units:</span><span class="value bad" id="rejected-val">0</span></div>
+                    <div class="data-point"><span><i class="fa-solid fa-temperature-half"></i> Machine Temp:</span><span class="value" id="temp-val">-- °C</span></div>
+                    
+                    <!-- Progress Bars -->
+                    <div class="progress-bar-container">
+                        <div class="label-container"><i class="fa-solid fa-cubes"></i><span>Plastic Pellets</span></div>
+                        <div class="progress-bar"><div class="progress-fill" id="plastic-fill"></div><span class="progress-text" id="plastic-val">100%</span></div>
+                    </div>
+                     <div class="progress-bar-container">
+                        <div class="label-container"><i class="fa-solid fa-vial"></i><span>Liquid Tank</span></div>
+                        <div class="progress-bar"><div class="progress-fill" id="liquid-fill"></div><span class="progress-text" id="liquid-val">100%</span></div>
+                    </div>
+                     <div class="progress-bar-container">
+                        <div class="label-container"><i class="fa-solid fa-gear"></i><span>Cap Hopper</span></div>
+                        <div class="progress-bar"><div class="progress-fill" id="caps-fill"></div><span class="progress-text" id="caps-val">100%</span></div>
+                    </div>
+                    
+                    <h3 style="margin-top:auto;"><i class="fa-solid fa-terminal"></i> System Log</h3>
+                    <button id="manual-halt-btn" disabled><i class="fa-solid fa-hand-paper"></i> Manual System Halt</button>
+                    <div id="log-area"><p><span class="log-time">[--:--:--]</span> System Initialized. Awaiting orders.</p></div>
+                </div>
+                <div id="instruction-screen">
+                    <h3 id="instruction-title"></h3><p id="instruction-desc"></p>
+                    <div id="instruction-data-display"></div><button id="instruction-btn"></button>
+                </div>
+            </div>
+        </main>
+    </div>
+    
+    <footer><i class="fa-solid fa-flask-vial"></i> Website created by the BIOTECH team <i class="fa-solid fa-flask-vial"></i></footer>
+    
+<script>
+// IMPORTANT: To make the new progress bars work, a few lines MUST be added to your JavaScript.
+// Find the `updateDashboard` function in your script and ADD the lines marked with "// ADD THIS LINE".
+// The core logic remains unchanged, this just links the data to the new visual elements.
+/*
+    const updateDashboard = () => {
+        // ... (existing code) ...
+        elements.producedVal.textContent = state.production.produced;
+        elements.rejectedVal.textContent = state.production.rejected;
+
+        const plasticPercent = state.materials.plastic.toFixed(1);
+        elements.plasticVal.textContent = `${plasticPercent}%`;
+        getEl('plastic-fill').style.width = `${plasticPercent}%`; // ADD THIS LINE
+
+        const liquidPercent = state.materials.liquid.toFixed(1);
+        elements.liquidVal.textContent = `${liquidPercent}%`;
+        getEl('liquid-fill').style.width = `${liquidPercent}%`; // ADD THIS LINE
+
+        const capsPercent = state.materials.caps.toFixed(1);
+        elements.capsVal.textContent = `${capsPercent}%`;
+        getEl('caps-fill').style.width = `${capsPercent}%`; // ADD THIS LINE
+
+        // ... (rest of the function) ...
+    };
+*/
+document.addEventListener('DOMContentLoaded', () => {
+    // --- DOM REFERENCES ---
+    const getEl = id => document.getElementById(id);
+    const elements = {
+        levels: [getEl('level4'), getEl('level3'), getEl('level2'), getEl('level1'), getEl('level0')],
+        dcsContainer: getEl('dcs-container'),
+        interactionPanel: getEl('interaction-panel'),
+        liveDataScreen: getEl('live-data-screen'),
+        statusVal: getEl('status-val'), orderIdVal: getEl('order-id-val'), producedVal: getEl('produced-val'),
+        goalVal: getEl('goal-val'), rejectedVal: getEl('rejected-val'), tempVal: getEl('temp-val'),
+        plasticVal: getEl('plastic-val'), liquidVal: getEl('liquid-val'), capsVal: getEl('caps-val'),
+        manualHaltBtn: getEl('manual-halt-btn'),
+        logArea: getEl('log-area'),
+        instructionScreen: getEl('instruction-screen'), instructionTitle: getEl('instruction-title'),
+        instructionDesc: getEl('instruction-desc'), instructionDataDisplay: getEl('instruction-data-display'), instructionBtn: getEl('instruction-btn'),
+        conveyor: getEl('conveyor'), bottle: getEl('bottle'), bottleLiquid: getEl('bottle').querySelector('.bottle-liquid'),
+        bottleCap: getEl('bottle').querySelector('.bottle-cap'), bottleLabel: getEl('bottle').querySelector('.bottle-label'),
+        stations: {
+            molder: getEl('station-molder'), filler: getEl('station-filler'), capper: getEl('station-capper'),
+            labeler: getEl('station-labeler'), qc: getEl('station-qc')
+        },
+        animationContainer: getEl('bottle-animation-container'),
+        pelletContainer: getEl('bottle-animation-container').querySelector('.pellet-container')
+    };
+
+    // --- STATE MANAGEMENT ---
+    let state;
+    let tempInterval = null;
+    const initialState = () => ({
+        simRunning: false, isPaused: false, isHalted: false, cycleInProgress: false,
+        order: { id: null, product: '', customer: '', quantity: 0 },
+        schedule: { workers: 0, deadline: 0 },
+        production: { produced: 0, rejected: 0, temp: 0 },
+        materials: { liquid: 100, caps: 100, plastic: 100 }
+    });
+
+    // --- HELPER FUNCTIONS ---
+    const log = (message, type = '') => {
+        const time = new Date().toLocaleTimeString();
+        elements.logArea.innerHTML += `<p><span class="log-time">[${time}]</span> <span class="log-${type}">${message}</span></p>`;
+        elements.logArea.scrollTop = elements.logArea.scrollHeight;
+    };
+    const sleep = ms => new Promise(res => setTimeout(res, ms));
+    const setPanelState = panelState => elements.interactionPanel.className = `interaction-panel ${panelState}`;
+    
+    const animateDataPacket = (fromEl, toEl, color, onComplete) => {
+        const packet = document.createElement('div');
+        packet.className = 'data-packet'; packet.style.setProperty('--packet-color', color);
+        elements.dcsContainer.appendChild(packet);
+        const containerRect = elements.dcsContainer.getBoundingClientRect();
+        const fromRect = fromEl.getBoundingClientRect(); const toRect = toEl.getBoundingClientRect();
+        const startX = fromRect.left + fromRect.width / 2 - containerRect.left;
+        const startY = fromRect.top + fromRect.height / 2 - containerRect.top;
+        const endY = toRect.top + toRect.height / 2 - containerRect.top;
+        packet.style.left = `${startX - 6}px`; packet.style.top = `${startY - 6}px`;
+        requestAnimationFrame(() => { packet.style.top = `${endY - 6}px`; });
+        setTimeout(() => { packet.remove(); onComplete?.(); }, 1500);
+    };
+
+    const showInstructionScreen = ({ title, desc, dataItems, btnText, onBtnClick, hasInputs = false }) => {
+        const oldOverrideBtn = document.querySelector('.manual-override-btn');
+        if (oldOverrideBtn) oldOverrideBtn.remove();
+
+        setPanelState('state-instruction');
+        elements.instructionTitle.innerHTML = title; // Use innerHTML to allow icons
+        elements.instructionDesc.textContent = desc;
+        elements.instructionDataDisplay.innerHTML = '';
+        dataItems.forEach(item => {
+            const valueHTML = hasInputs ? item.control : `<span class="value">${item.value}</span>`;
+            elements.instructionDataDisplay.innerHTML += `
+                <div class="data-item">
+                    <div class="icon-label"><span class="icon"><i class="fa-solid ${item.icon}"></i></span><span class="label">${item.label}:</span></div>
+                    ${valueHTML}
+                </div>`;
+        });
+        elements.instructionBtn.innerHTML = btnText;
+        elements.instructionBtn.onclick = onBtnClick;
+        elements.instructionBtn.disabled = false; // Ensure button is enabled
+        
+        if (title.includes('PLC')) { // Special case for PLC manual override
+            const manualOverrideBtn = document.createElement('button');
+            manualOverrideBtn.className = 'manual-override-btn';
+            manualOverrideBtn.textContent = 'Manual Override: PAUSE';
+            manualOverrideBtn.onclick = togglePause;
+            elements.instructionDataDisplay.insertAdjacentElement('afterend', manualOverrideBtn);
+        }
+    };
+
+    const updateDashboard = () => {
+        elements.statusVal.textContent = state.isHalted ? 'HALTED' : (state.isPaused ? 'PAUSED' : (state.simRunning ? 'RUNNING' : 'IDLE'));
+        elements.statusVal.className = state.isHalted ? 'value bad' : (state.simRunning && !state.isPaused ? 'value ok' : 'value');
+        elements.orderIdVal.textContent = state.order.id || 'N/A';
+        elements.goalVal.textContent = state.order.quantity || '0';
+        elements.producedVal.textContent = state.production.produced;
+        elements.rejectedVal.textContent = state.production.rejected;
+        
+        const plasticPercent = state.materials.plastic.toFixed(1);
+        elements.plasticVal.textContent = `${plasticPercent}%`;
+        getEl('plastic-fill').style.width = `${Math.max(0, plasticPercent)}%`;
+
+        const liquidPercent = state.materials.liquid.toFixed(1);
+        elements.liquidVal.textContent = `${liquidPercent}%`;
+        getEl('liquid-fill').style.width = `${Math.max(0, liquidPercent)}%`;
+
+        const capsPercent = state.materials.caps.toFixed(1);
+        elements.capsVal.textContent = `${capsPercent}%`;
+        getEl('caps-fill').style.width = `${Math.max(0, capsPercent)}%`;
+
+        if (state.simRunning && !state.isPaused) {
+            const temp = state.production.temp;
+            elements.tempVal.textContent = `${temp.toFixed(1)} °C`;
+            elements.tempVal.className = (temp > 195 || temp < 185) ? 'value warn' : 'value ok';
+        } else if (!state.simRunning) {
+             elements.tempVal.textContent = `-- °C`;
+             elements.tempVal.className = 'value';
+        }
+    };
+    
+    const resetUI = () => {
+        state = initialState();
+        if(tempInterval) clearInterval(tempInterval);
+        tempInterval = null;
+        elements.levels.forEach(l => l.classList.remove('active', 'success', 'processing'));
+        elements.manualHaltBtn.disabled = true;
+        setPanelState('state-idle'); updateDashboard();
+        elements.logArea.innerHTML = `<p><span class="log-time">[${new Date().toLocaleTimeString()}]</span> System Initialized. Awaiting new orders.</p>`;
+        elements.conveyor.classList.remove('running');
+        elements.bottle.style.transition = 'none';
+        Object.assign(elements.bottle.style, { left: '-50px', opacity: 0, transform: 'rotate(0deg)', top: '' });
+        Object.values(elements.stations).forEach(s => s.classList.remove('active'));
+        elements.bottleLiquid.style.height = '0%';
+        elements.bottleCap.style.opacity = '0';
+        elements.bottleLabel.style.opacity = '0';
+        promptLevel4_Order();
+    };
+    
+    // --- BOTTLE ANIMATION ---
+    const playBottleMakingAnimation = () => {
+        elements.pelletContainer.innerHTML = ''; // Clear old pellets
+        for (let i = 0; i < 10; i++) {
+            const pellet = document.createElement('div');
+            pellet.className = 'pellet';
+            pellet.style.animationDelay = `${i * 0.05}s`;
+            pellet.style.left = `${45 + Math.random() * 10}%`;
+            elements.pelletContainer.appendChild(pellet);
+        }
+        elements.animationContainer.classList.add('animating');
+        setTimeout(() => {
+            elements.animationContainer.classList.remove('animating');
+            elements.pelletContainer.innerHTML = '';
+        }, 3000); // Duration of the whole sequence
+    };
+    
+    // --- SIMULATION FLOW ---
+    
+    // LEVEL 4: Create Order
+    function promptLevel4_Order() {
+        const orderId = `BTS-${Math.floor(1000 + Math.random() * 9000)}`;
+        state.order.id = orderId;
+        elements.levels[0].classList.add('active');
+        showInstructionScreen({
+            title: '<i class="fa-solid fa-file-invoice"></i> L4: Create Business Order', desc: 'Define the high-level production requirements for the new order.', hasInputs: true,
+            dataItems: [
+                { icon: 'fa-id-card', label: 'Order ID', control: `<span class="value">${orderId}</span>`},
+                { icon: 'fa-flask', label: 'Product Type', control: `<select id="product-type"><option value="Nutri-Serum">Nutri-Serum</option><option value="Gene-Tonic">Gene-Tonic</option></select>`},
+                { icon: 'fa-user-tie', label: 'Customer', control: `<input id="customer" type="text" value="OmniCorp Labs">`},
+                { icon: 'fa-bullseye', label: 'Quantity', control: `<input id="quantity" type="number" value="10" min="1" max="50">`},
+            ],
+            btnText: '<i class="fa-solid fa-paper-plane"></i> Send Order to Operations (L3)',
+            onBtnClick: () => {
+                elements.instructionBtn.disabled = true;
+                state.order.product = getEl('product-type').value; state.order.customer = getEl('customer').value; state.order.quantity = parseInt(getEl('quantity').value, 10);
+                if(isNaN(state.order.quantity) || state.order.quantity <= 0) {
+                    alert('Please enter a valid quantity.');
+                    elements.instructionBtn.disabled = false;
+                    return;
+                }
+                log(`L4: New order ${state.order.id} for ${state.order.quantity} units of ${state.order.product} created.`, 'cmd');
+                updateDashboard();
+                playBottleMakingAnimation();
+                animateDataPacket(elements.levels[0], elements.levels[1], 'var(--command-color)', () => {
+                    elements.levels[0].classList.add('success'); promptLevel3_Schedule();
+                });
+            }
+        });
+    }
+
+    // LEVEL 3: Schedule Production
+    function promptLevel3_Schedule() {
+        elements.levels[1].classList.add('active');
+        showInstructionScreen({
+            title: '<i class="fa-solid fa-calendar-days"></i> L3: Operations Scheduling (MES)', desc: `MES received order ${state.order.id}. Allocate resources and create a schedule.`, hasInputs: true,
+            dataItems: [
+                { icon: 'fa-id-card', label: 'Order ID', control: `<span class="value">${state.order.id}</span>` },
+                { icon: 'fa-users', label: 'Workers/Shift', control: `<input id="workers" type="number" value="8" min="2" max="20">` },
+                { icon: 'fa-clock', label: 'Deadline (Hrs)', control: `<input id="deadline" type="number" value="24" min="1" max="168">` },
+            ],
+            btnText: '<i class="fa-solid fa-list-check"></i> Dispatch Schedule to SCADA (L2)',
+            onBtnClick: () => {
+                state.schedule.workers = parseInt(getEl('workers').value); state.schedule.deadline = parseInt(getEl('deadline').value);
+                log(`L3: Schedule created. ${state.schedule.workers} workers, ${state.schedule.deadline}hr deadline.`, 'cmd');
+                animateDataPacket(elements.levels[1], elements.levels[2], 'var(--command-color)', () => {
+                    elements.levels[1].classList.add('success'); promptLevel2_SCADA();
+                });
+            }
+        });
+    }
+    
+    // LEVEL 2: SCADA Control
+    function promptLevel2_SCADA() {
+        elements.levels[2].classList.add('active');
+        showInstructionScreen({
+            title: '<i class="fa-solid fa-display"></i> L2: SCADA Control HMI', desc: 'System ready. Review parameters and initiate production start command to the PLC.',
+            dataItems: [
+                { icon: 'fa-book-open', label: 'Recipe', value: `${state.order.product}_STANDARD` }, { icon: 'fa-bullseye', label: 'Target', value: `${state.order.quantity} units` },
+                { icon: 'fa-vial', label: 'Liquid Tank', value: `100.0%` }, { icon: 'fa-gear', label: 'Cap Hopper', value: `100.0%` },
+            ],
+            btnText: '▶️ INITIATE PRODUCTION LINE',
+            onBtnClick: () => {
+                log(`L2: Production start command sent to PLC-01.`, 'cmd');
+                animateDataPacket(elements.levels[2], elements.levels[3], 'var(--command-color)', () => {
+                    elements.levels[2].classList.add('success'); promptLevel1_PLC();
+                });
+            }
+        });
+    }
+
+    // LEVEL 1: PLC Execution
+    function promptLevel1_PLC() {
+        elements.levels[3].classList.add('active');
+        showInstructionScreen({
+            title: '<i class="fa-solid fa-robot"></i> L1: PLC Live Status', desc: 'PLC has received program. Activating field devices and running logic.',
+            dataItems: [
+                 { icon: 'fa-bolt', label: 'Main Power', value: '<span style="color:var(--feedback-color)">ON</span>' },
+                 { icon: 'fa-person-running', label: 'Conveyor', value: '<span style="color:var(--process-color)">STANDBY</span>' },
+                 { icon: 'fa-faucet-drip', label: 'Pumps', value: '<span style="color:var(--process-color)">STANDBY</span>' },
+            ],
+            btnText: 'Start First Cycle',
+            onBtnClick: function() {
+                this.disabled = true; this.textContent = "Running..."; log(`L1: Logic is LIVE. Starting first production cycle.`, 'cmd');
+                animateDataPacket(elements.levels[3], elements.levels[4], 'var(--command-color)', async () => {
+                    elements.levels[3].classList.add('success'); elements.levels[4].classList.add('active');
+                    state.simRunning = true; setPanelState('state-live-data');
+                    elements.manualHaltBtn.disabled = false;
+                    tempInterval = setInterval(() => { state.production.temp = 188 + (Math.random() * 10 - 3); updateDashboard(); }, 1000);
+                    updateDashboard(); runFactoryCycle();
+                });
+            }
+        });
+    }
+
+    // --- FACTORY CYCLE & ANIMATIONS ---
+    async function runFactoryCycle() {
+        if (state.isHalted || !state.simRunning || (state.production.produced >= state.order.quantity)) {
+            if (state.simRunning && !state.isHalted) stopSimulation();
+            return;
+        }
+        state.cycleInProgress = true;
+        while (state.isPaused) { await sleep(100); }
+        if (state.isHalted) return;
+        
+        const totalProcessed = state.production.produced + state.production.rejected;
+        log(`--- Cycle ${totalProcessed + 1} of ${state.order.quantity} started ---`);
+
+        resetBottleVisuals(); elements.conveyor.classList.add('running');
+        
+        await animateBottle(0, 16, 2000, async () => { if (state.isHalted) return; await activateStation('molder'); });
+        if (state.isHalted) return;
+        await animateBottle(16, 37, 2000, async () => { if (state.isHalted) return; await activateStation('filler'); });
+        if (state.isHalted) return;
+        await animateBottle(37, 58, 2000, async () => { if (state.isHalted) return; await activateStation('capper'); });
+        if (state.isHalted) return;
+        await animateBottle(58, 79, 2000, async () => { if (state.isHalted) return; await activateStation('labeler'); });
+        if (state.isHalted) return;
+        const isGoodQuality = await animateBottle(79, 100, 2000, async () => { if(state.isHalted) return; return await activateStation('qc'); });
+        
+        if (state.isHalted) return;
+        handleBottleFinish(isGoodQuality);
+    }
+    
+    function resetBottleVisuals() {
+        elements.bottle.style.transition = 'none';
+        Object.assign(elements.bottle.style, { left: '-50px', opacity: 1, transform: 'rotate(0deg)', top: '' });
+        elements.bottleLiquid.style.transition = 'none'; elements.bottleLiquid.style.height = '0%';
+        elements.bottleCap.style.opacity = '0'; elements.bottleLabel.style.opacity = '0';
+    }
+
+    const animateBottle = (startPos, endPos, duration, stationAction) => new Promise(async resolve => {
+        await sleep(20); if(state.isHalted) return;
+        elements.bottle.style.transition = `left ${duration/1000}s linear`;
+        elements.bottle.style.left = `calc(${endPos}% - 25px)`;
+
+        if(stationAction) { await sleep(duration * 0.1); if(state.isHalted) return; const result = await stationAction(); resolve(result); }
+        await sleep(duration);
+        if(!stationAction) resolve();
+    });
+
+    const activateStation = async (stationName) => {
+        const stationEl = elements.stations[stationName];
+        stationEl.classList.add('active'); log(`L0: Station ${stationName.toUpperCase()} is active.`, 'fb');
+        
+        let qualityResult = true;
+        
+        switch (stationName) {
+            case 'molder': state.materials.plastic -= (80 / state.order.quantity); break;
+            case 'filler': elements.bottleLiquid.style.transition = 'height 0.4s ease-in'; elements.bottleLiquid.style.height = `${80 + Math.random() * 15}%`; state.materials.liquid -= (80 / state.order.quantity); break;
+            case 'capper': elements.bottleCap.style.opacity = '1'; state.materials.caps -= (100 / state.order.quantity); break;
+            case 'labeler': elements.bottleLabel.textContent = state.order.product; elements.bottleLabel.style.opacity = '1'; elements.bottleLabel.style.transform = 'scale(1)'; break;
+            case 'qc': if (Math.random() > 0.8) {
+                stationEl.querySelector('.station-icon').style.color = 'var(--alert-color)';
+                log('L0: Quality Check FAILED.', 'alert');
+                qualityResult = false;
+            } else { log('L0: Quality Check PASSED.', 'fb'); } break;
+        }
+        updateDashboard();
+        await sleep(800);
+        stationEl.classList.remove('active');
+        stationEl.querySelector('.station-icon').style.color = '';
+        return qualityResult;
+    };
+
+
+    function handleBottleFinish(isGood) {
+        if(isGood) {
+            state.production.produced++; log(`Bottle cycle complete. Status: OK. Total Good: ${state.production.produced}`, 'fb');
+             elements.bottle.style.opacity = '0';
+        } else {
+            state.production.rejected++; log(`Bottle REJECTED. Total Rejected: ${state.production.rejected}`, 'alert');
+            Object.assign(elements.bottle.style, { transition: 'transform 0.5s ease-in, top 0.5s ease-in, opacity 0.5s linear 0.2s', transform: 'rotate(90deg) scale(0.8)', top: '150px' , opacity: '0' });
+        }
+        updateDashboard(); elements.conveyor.classList.remove('running');
+        animateDataPacket(elements.stations.qc, elements.levels[3], 'var(--feedback-color)', plcProcessesData);
+    }
+    
+    async function plcProcessesData() {
+        const plcLevel = elements.levels[3];
+        plcLevel.classList.add('processing'); log(`L1: PLC received cycle-end signal. Evaluating system state...`, 'warn');
+        await sleep(1200); plcLevel.classList.remove('processing');
+        state.cycleInProgress = false; runFactoryCycle();
+    }
+    
+    const manualHalt = () => {
+        if (!state.simRunning) return;
+        state.isHalted = true; state.simRunning = false;
+        if(tempInterval) clearInterval(tempInterval); tempInterval = null;
+        log('*** MANUAL SYSTEM HALT INITIATED BY OPERATOR ***', 'alert');
+        elements.conveyor.classList.remove('running'); elements.manualHaltBtn.disabled = true;
+        const bottleStyle = window.getComputedStyle(elements.bottle);
+        elements.bottle.style.left = bottleStyle.getPropertyValue('left');
+        elements.bottle.style.transition = 'none'; updateDashboard();
+
+        showInstructionScreen({
+            title: '<i class="fa-solid fa-circle-stop"></i> System Halted', desc: 'A manual override has stopped all production. The current batch is compromised and must be abandoned.',
+            dataItems: [
+                { icon: 'fa-triangle-exclamation', label: 'Reason', value: 'Operator Override'},
+                { icon: 'fa-box', label: 'Units In-Progress', value: 1},
+                { icon: 'fa-trash', label: 'Action', value: 'Requires Reset'}
+            ],
+            btnText: '<i class="fa-solid fa-arrows-rotate"></i> Reset Simulation',
+            onBtnClick: resetUI
+        });
+    };
+
+    const togglePause = () => { /* Not implemented for this version */ };
+
+    function stopSimulation() {
+        state.simRunning = false; elements.manualHaltBtn.disabled = true; if(tempInterval) clearInterval(tempInterval); tempInterval = null;
+        log('--- Production goal reached. Finishing up. ---', 'cmd');
+        elements.levels[4].classList.remove('active'); elements.conveyor.classList.remove('running');
+        log('L2: Compiling final report for business planning.', 'fb');
+        animateDataPacket(elements.levels[2], elements.levels[0], 'var(--feedback-color)', () => {
+            log('L4: Final production report received.', 'fb');
+            elements.levels[0].classList.add('active'); // Highlight L4 for report
+            const totalUsed = (100 - state.materials.plastic).toFixed(1);
+            showInstructionScreen({
+                title: '<i class="fa-solid fa-flag-checkered"></i> Production Complete', desc: `Order ${state.order.id} has been fulfilled. Final report is below.`,
+                dataItems: [
+                    { icon: 'fa-box-open', label: 'Good Units', value: `${state.production.produced} / ${state.order.quantity}`},
+                    { icon: 'fa-box-open', label: 'Rejected Units', value: state.production.rejected },
+                    { icon: 'fa-recycle', label: 'Plastic Used', value: `${totalUsed > 0 ? totalUsed : 0}%` },
+                ],
+                btnText: '<i class="fa-solid fa-plus-circle"></i> Start New Order',
+                onBtnClick: resetUI
+            });
+        });
+    }
+
+    // --- INITIALIZATION ---
+    elements.manualHaltBtn.addEventListener('click', manualHalt);
+    resetUI();
+});
+</script>
+</body>
+</html>
